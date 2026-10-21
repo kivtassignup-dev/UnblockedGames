@@ -42,6 +42,18 @@ export default function App() {
   const [isCloakModalOpen, setIsCloakModalOpen] = useState(false);
   const [isDecoyActive, setIsDecoyActive] = useState(false);
 
+  // Resolve relative URLs correctly whether hosted at root or on a GitHub Pages subpath
+  const resolvePath = (url) => {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('linear-gradient')) {
+      return url;
+    }
+    const clean = url.startsWith('/') ? url.slice(1) : url;
+    const base = import.meta.env.BASE_URL || './';
+    const prefix = base.endsWith('/') ? base : `${base}/`;
+    return `${prefix}${clean}`;
+  };
+
   // Restore saved cloak on startup
   useEffect(() => {
     const savedCloakId = localStorage.getItem('unblock_cloak_id');
@@ -53,10 +65,15 @@ export default function App() {
 
   // Fetch games from JSON file
   useEffect(() => {
-    fetch('/games.json')
+    fetch(resolvePath('games.json'))
       .then(res => res.json())
       .then((data) => {
-        setGames(data);
+        const resolved = data.map(g => ({
+          ...g,
+          iframeUrl: resolvePath(g.iframeUrl),
+          thumbnail: resolvePath(g.thumbnail)
+        }));
+        setGames(resolved);
       })
       .catch(err => {
         console.error('Failed to load games.json:', err);
