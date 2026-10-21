@@ -3,7 +3,7 @@ export const CLOAK_PRESETS = [
     id: 'default',
     name: 'UnblockHub (Default)',
     title: 'UnblockHub - HTML5 Unblocked Games',
-    icon: 'favicon.ico'
+    icon: '/favicon.svg'
   },
   {
     id: 'docs',
