@@ -1,0 +1,6 @@
+{
+  "name": "UnblockHub - HTML5 Unblocked Games",
+  "description": "Fast, lightweight unblocked HTML5 arcade and puzzle games catalog loaded cleanly in responsive iframes from JSON.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

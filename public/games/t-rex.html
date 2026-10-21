@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>T-Rex Desert Runner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 520px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .val { color: #10b981; font-variant-numeric: tabular-nums; }
+    #canvas-box {
+      position: relative;
+      width: 520px;
+      height: 240px;
+      max-width: 95vw;
+      border: 2px solid #1e293b;
+      border-radius: 12px;
+      background: #020617;
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.15);
+      overflow: hidden;
+      cursor: pointer;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      text-align: center;
+    }
+    .overlay h2 { font-size: 22px; font-weight: 800; color: #10b981; margin-bottom: 6px; }
+    .overlay p { color: #94a3b8; font-size: 13px; margin-bottom: 14px; }
+    .btn {
+      background: #10b981;
+      color: #000;
+      border: none;
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .hint { margin-top: 12px; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div>DISTANCE: <span id="dist" class="val">0m</span></div>
+    <div>RECORD: <span id="record" class="val">0m</span></div>
+  </div>
+
+  <div id="canvas-box">
+    <canvas id="gameCanvas" width="520" height="240"></canvas>
+    <div id="overlay" class="overlay">
+      <h2 id="overlay-title">DESERT T-REX RUNNER</h2>
+      <p id="overlay-desc">Press Spacebar or Up Arrow to jump over the desert cacti!</p>
+      <button id="start-btn" class="btn">START RUN</button>
+    </div>
+  </div>
+
+  <div class="hint">Controls: Space or &uarr; to Jump &middot; Click / Tap screen</div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const distEl = document.getElementById('dist');
+    const recordEl = document.getElementById('record');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const overlayDesc = document.getElementById('overlay-desc');
+    const startBtn = document.getElementById('start-btn');
+
+    let record = parseInt(localStorage.getItem('unblock_trex_best') || '0', 10);
+    recordEl.textContent = `${record}m`;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function sfx(freq, type = 'square', dur = 0.08) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch (e) {}
+    }
+
+    const GROUND_Y = 190;
+    let dino = { x: 50, y: GROUND_Y - 40, width: 32, height: 40, vy: 0, gravity: 0.8, isJumping: false };
+    let obstacles = [];
+    let speed = 5;
+    let distance = 0;
+    let gameRunning = false;
+    let frame = 0;
+
+    function resetGame() {
+      dino.y = GROUND_Y - dino.height;
+      dino.vy = 0;
+      dino.isJumping = false;
+      obstacles = [];
+      speed = 5.5;
+      distance = 0;
+      frame = 0;
+      distEl.textContent = '0m';
+      gameRunning = true;
+      overlay.style.display = 'none';
+      requestAnimationFrame(loop);
+      sfx(440, 'triangle', 0.1);
+    }
+
+    function jump() {
+      if (!gameRunning) return;
+      if (!dino.isJumping) {
+        dino.vy = -12.5;
+        dino.isJumping = true;
+        sfx(600, 'square', 0.06);
+      }
+    }
+
+    function loop() {
+      if (!gameRunning) return;
+      frame++;
+      distance += Math.floor(speed * 0.1);
+      distEl.textContent = `${distance}m`;
+
+      if (distance > record) {
+        record = distance;
+        recordEl.textContent = `${record}m`;
+        localStorage.setItem('unblock_trex_best', record);
+      }
+
+      // Physics
+      dino.vy += dino.gravity;
+      dino.y += dino.vy;
+      if (dino.y >= GROUND_Y - dino.height) {
+        dino.y = GROUND_Y - dino.height;
+        dino.vy = 0;
+        dino.isJumping = false;
+      }
+
+      // Spawn Cacti
+      if (frame % Math.floor(100 - speed * 3) === 0 && Math.random() > 0.3) {
+        const h = Math.random() > 0.5 ? 36 : 28;
+        obstacles.push({
+          x: canvas.width + 20,
+          y: GROUND_Y - h,
+          width: 18,
+          height: h
+        });
+      }
+
+      // Move obstacles
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.x -= speed;
+
+        // Collision Check (AABB)
+        const hitX = dino.x + dino.width > obs.x + 4 && dino.x + 4 < obs.x + obs.width;
+        const hitY = dino.y + dino.height > obs.y + 4;
+        if (hitX && hitY) {
+          gameOver();
+          return;
+        }
+
+        if (obs.x < -30) obstacles.splice(i, 1);
+      }
+
+      // Slowly increase speed
+      if (frame % 300 === 0 && speed < 11) {
+        speed += 0.3;
+      }
+
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      gameRunning = false;
+      sfx(160, 'sawtooth', 0.25);
+      overlayTitle.textContent = 'STUMBLED!';
+      overlayDesc.textContent = `Distance: ${distance}m · Best: ${record}m`;
+      startBtn.textContent = 'RUN AGAIN';
+      overlay.style.display = 'flex';
+    }
+
+    function render() {
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Ground Line
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_Y);
+      ctx.lineTo(canvas.width, GROUND_Y);
+      ctx.stroke();
+
+      // Ground bumps
+      ctx.fillStyle = '#1e293b';
+      for (let x = 0; x < canvas.width; x += 40) {
+        const bumpOffset = (x - (frame * speed) % 40);
+        ctx.fillRect(bumpOffset, GROUND_Y + 4, 12, 2);
+      }
+
+      // Dino
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
+      // Eye
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(dino.x + 20, dino.y + 6, 4, 4);
+      // Legs (simple running animation)
+      if (!dino.isJumping) {
+        const leg = Math.floor(frame / 6) % 2;
+        ctx.fillStyle = '#059669';
+        ctx.fillRect(dino.x + 6, dino.y + dino.height - 6, 6, leg ? 6 : 4);
+        ctx.fillRect(dino.x + 20, dino.y + dino.height - 6, 6, leg ? 4 : 6);
+      }
+
+      // Obstacles (Cacti)
+      ctx.fillStyle = '#ef4444';
+      obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        // Arms
+        ctx.fillRect(obs.x - 4, obs.y + 8, 4, 10);
+        ctx.fillRect(obs.x + obs.width, obs.y + 12, 4, 10);
+      });
+    }
+
+    startBtn.addEventListener('click', e => { e.stopPropagation(); resetGame(); });
+    document.getElementById('canvas-box').addEventListener('click', jump);
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        if (!gameRunning && overlay.style.display !== 'none') {
+          resetGame();
+        } else {
+          jump();
+        }
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
